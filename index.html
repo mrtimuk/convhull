@@ -4,17 +4,22 @@
 	<title>Convex Hull</title>
 <style>
 	#svgCanvas {
-		border: solid thin #666;
-		cursor: crosshair;
+		border:solid thin #666;
+		cursor:crosshair;
+		margin-bottom:8px;
+		border-radius:4px;
 	}
 	#page {
-		padding: 3em;
-		width: 40em;
-		margin: auto;
-		background: #eee
+		padding:3em;
+		width:40em;
+		margin:auto;
+		background: #eee;
+		border-radius:4px;
+		box-shadow: 1px 1px 10px 2px #222;
 	}
 	body {
-		background: #888;
+		background: #600;
+		font-family:Verdana, Geneva, Tahoma, sans-serif;
 	}
 </style>
 </head>
@@ -228,13 +233,13 @@ function step4()
 		state.cullIndex = 0;
 		return;
 	}
-	
+
 	var i = state.cullIndex;
 	console.log("hull point", (i-1) % hull.length + 1);
-	
-	var concave = turn(hull[i - 2], hull[i - 1], hull[i % hull.length]) < 0;
+
+	var concave = turn(hull[i - 2], hull[i - 1], hull[i % hull.length]) <= 0;
 	hilightVertex(hull[i - 2], hull[i - 1], hull[i % hull.length], !concave);
-	
+
 	if (concave)
 	{
 		console.log("Point ",i," was concave");
@@ -246,20 +251,24 @@ function step4()
 		console.log("Restarting from point ",i);
 	}
 	state.cullIndex++;
-	state.nextStep = 4;
+
+	if (state.cullIndex > hull.length) {
+		state.cullIndex = 0;
+	} else {
+		state.nextStep = 4;
+	}
 }
 
 function step5() {
 	hilightVertex();
-	//drawHull(hull, "dodgerblue");
-}
 
-function step6() {
 	var leftmostPoint = document.getElementById("p"+state.leftmostPoint.i);
 	leftmostPoint.style.fill='inherit';
 	leftmostPoint.setAttributeNS(null, "r", 1.5);
 
 	drawHull(hull, "blue", true);
+
+	console.log("Hull", hull);
 }
 
 function drawHull(pts, color, joinUp)
@@ -309,7 +318,6 @@ var steps = [
 	step3,
 	step4,
 	step5,
-	step6,
 	stepStop
 ];
 
