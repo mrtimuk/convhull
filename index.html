@@ -1,0 +1,333 @@
+<html>
+<head>
+	<meta http-equiv=Content-Type content="text/html; charset=utf-8"/>
+	<title>Convex Hull</title>
+<style>
+	#svgCanvas {
+		border: solid thin #666;
+		cursor: crosshair;
+	}
+	#page {
+		padding: 3em;
+		width: 40em;
+		margin: auto;
+		background: #eee
+	}
+	body {
+		background: #888;
+	}
+</style>
+</head>
+<body>
+<div id="page">
+	<h1>Convex Hull</h1>
+	<p> 1) Click in the box to add a few points </p>
+	<p >
+		<svg id="svgCanvas" style="float:left;" version="1.1" xmlns="http://www.w3.org/2000/svg" 
+		xmlns:xlink="http://www.w3.org/1999/xlink"
+		width="400px" height="400px" viewBox="0 0 400 400">
+		<g id="gPoints"></g>
+		<g id="gMidpoint"></g>
+		<g id="gLine"></g>
+		<g id="gVertex"></g>
+		</svg>
+		<div id="divDesc" style="float:left; width:200px; margin-left:8px;"></div>
+	</p>
+	<p style="clear:both;">
+	2) Click the button to calculate the <button id="btnGo" disabled autocomplete="off">Convex Hull</button> 
+	</p>
+</div>
+
+<script>
+var xmlns="http://www.w3.org/2000/svg";
+statics = {};
+['divDesc','svgCanvas','gPoints','gMidpoint','gLine','gVertex','btnGo']
+.forEach(function(id){ statics[id] = document.getElementById(id);});
+
+var state = {
+	nextStep: 0,
+	points: [],
+	leftmostPoint: null,
+
+	hull: [],
+
+	cullIndex: 0
+};
+
+// Point prototype
+function Point(x, y) {
+	this.x = x;
+	this.y = y;
+	this.add = function(otherp) {
+		return new Point(this.x + otherp.x, this.y + otherp.y);
+	};
+	this.sub = function(otherp) {
+		return new Point(this.x - otherp.x, this.y - otherp.y);
+	};
+	this.cross = function(otherp) {
+		return otherp.X * this.Y - otherp.Y * this.X;
+	};
+	this.quad = function() { // quadrant number
+		var msb = this.x > 0 ? 2 : 0;
+		var lsb = this.y > 0 ^ this.x > 0 ? 1 : 0;
+		return msb + lsb + 1;
+	};
+	this.gradient = function() {
+		return this.x == 0 ? Infinity : this.y / this.x; 
+	}
+}
+
+function turn(p1, p2, p3) {
+	// p1->p2 cross p1->p3, +ve => counter clockwise
+	var ret = (p2.x - p1.x) * (p3.y - p1.y) - (p2.y - p1.y) * (p3.x - p1.x);
+	console.log("turn (", p1, p2, p3, ") =>", ret);
+	return ret;
+	//return p2.sub(p1).cross(p3.sub(p1));
+}
+
+function midpoint(points) {
+	var result = points[0];
+	for (var i = 1; i < points.length; i++) {
+		result = result.add(points[i]);
+	}
+	return new Point(result.x / points.length, result.y / points.length);
+}
+
+function addPoint (e) {
+	var pt = svgCanvas.createSVGPoint();
+	pt.x = e.x;
+	pt.y = e.y;
+	var svgP = pt.matrixTransform(statics.gPoints.getScreenCTM().inverse());
+
+	var c = document.createElementNS(xmlns, "circle");
+	c.setAttribute('cx', svgP.x);
+	c.setAttribute('cy', svgP.y);
+	c.setAttribute('r', 1.5);
+	c.id = "p" + state.points.length;
+	statics.gPoints.appendChild(c);
+
+	var p = new Point(svgP.x, svgP.y);
+	p.i = state.points.length;
+	state.points.push(p);
+	btnGo.disabled = state.points.length < 2;
+}
+statics.svgCanvas.onclick = addPoint;
+
+function clear() {
+	statics.gPoints.innerHTML = "";
+	statics.gMidpoint.innerHTML = "";
+	statics.gLine.innerHTML = "";
+	state.points = [];
+	statics.svgCanvas.onclick = addPoint;
+	statics.svgCanvas.style.cursor = "crosshair";
+}
+
+var origin = {};
+function step0()
+{
+	statics.divDesc.innerHTML = "<p>Locate the centre of the points</p>";
+
+	// Find midpoint
+	origin = midpoint(state.points);
+
+	var c = document.createElementNS(xmlns, "circle");
+	c.setAttribute('cx', origin.x);
+	c.setAttribute('cy', origin.y);
+	c.setAttribute('r', 6);
+	c.id = "pavg";
+	gMidpoint.setAttribute("fill", "none");
+	gMidpoint.setAttribute("stroke", "blue");
+	gMidpoint.appendChild(c);
+}
+
+function step1() {
+	statics.divDesc.innerHTML += "<p>The points are radially around this origin, order them by the angle</p>";
+
+	// Draw lines from origin to each point
+
+	for (var i = 0; i < state.points.length; i++) {
+		var l = document.createElementNS(xmlns, "line");
+		l.setAttribute('x1', origin.x);
+		l.setAttribute('y1', origin.y);
+		l.setAttribute('x2', state.points[i].x);
+		l.setAttribute('y2', state.points[i].y);
+		gMidpoint.appendChild(l);
+	}
+}
+
+function step2()
+{
+	statics.divDesc.innerHTML += "<p>We know that the left-most point will be on the hull so start there</p>";
+
+	statics.gMidpoint.setAttribute("fill", "none");
+	statics.gMidpoint.setAttribute("stroke", "gray");
+
+	// Find leftmost point
+	var leftmost = 0;
+	for (var i = 1; i < state.points.length; i++){
+		if (state.points[i].x < state.points[leftmost].x || 
+			(state.points[i].x == state.points[leftmost].x && state.points[i].y > state.points[leftmost].y)) {
+				leftmost = state.points[i].i;
+		}
+	}
+	state.leftmostPoint = state.points[leftmost];
+
+	var leftmostPoint = document.getElementById("p"+leftmost);
+	leftmostPoint.style.fill='red';
+	leftmostPoint.setAttributeNS(null, "r", 4);
+}
+
+function step3()
+{
+	statics.divDesc.innerHTML += 
+		"<p>Add all points to the potential hull in clockwise order (increasing angle)</p>";
+
+	// Sort points rotationally (clockwise)
+	var sorted = state.points.slice();
+	sorted.sort(function (a,b) {return rotationalOrder(origin, a, b)});
+
+	// Find the index of leftmost
+	for (var iStart = 0; iStart < sorted.length; iStart++) {
+		if (sorted[iStart].x == state.leftmostPoint.x &&
+			sorted[iStart].y == state.leftmostPoint.y) {
+			break;
+		}
+	}
+
+	// Assign from leftmost onwards
+	hull = [];
+	for (var i = 0; i < sorted.length; i++) {
+		hull.push(sorted[(iStart + i) % sorted.length]);
+	}
+	drawHull(hull, "dodgerblue");
+}
+
+function rotationalOrder(orig, p1, p2) {
+	var rel1 = p1.sub(orig);
+	var rel2 = p2.sub(orig);
+	var quad1 = rel1.quad();
+	var quad2 = rel2.quad();
+	return quad1 != quad2 ?		// sort by
+		quad2 - quad1 :    		// quadrant asc then
+		rel1.gradient() - rel2.gradient();  // gradient desc
+}
+
+function step4()
+{
+	if (!state.cullIndex) {
+		statics.gMidpoint.innerHTML = "";
+
+		statics.divDesc.innerHTML += 
+			"<p>Walk the potential hull, removing points that cause the line to be concave</p>";
+
+		console.log("Pre-cull hull has " + hull.length + " points")
+		state.cullIndex = 2;
+	}
+
+	if (state.cullIndex > hull.length) {
+		state.cullIndex = 0;
+		return;
+	}
+	
+	var i = state.cullIndex;
+	console.log("hull point", (i-1) % hull.length + 1);
+	
+	var concave = turn(hull[i - 2], hull[i - 1], hull[i % hull.length]) < 0;
+	hilightVertex(hull[i - 2], hull[i - 1], hull[i % hull.length], !concave);
+	
+	if (concave)
+	{
+		console.log("Point ",i," was concave");
+		hull.splice(i - 1, 1);
+
+		drawHull(hull, "dodgerblue");
+
+		state.cullIndex = Math.max(1, i - 2);
+		console.log("Restarting from point ",i);
+	}
+	state.cullIndex++;
+	state.nextStep = 4;
+}
+
+function step5() {
+	hilightVertex();
+	//drawHull(hull, "dodgerblue");
+}
+
+function step6() {
+	var leftmostPoint = document.getElementById("p"+state.leftmostPoint.i);
+	leftmostPoint.style.fill='inherit';
+	leftmostPoint.setAttributeNS(null, "r", 1.5);
+
+	drawHull(hull, "blue", true);
+}
+
+function drawHull(pts, color, joinUp)
+{
+	statics.gLine.innerHTML = "";
+
+	// Draw a line
+	var poly = document.createElementNS(xmlns, "polyline");
+	poly.setAttribute("stroke", color);
+	poly.setAttribute("fill", "none");
+	var path = '';
+	for (var i = 0; i < pts.length; i++){
+		path += pts[i].x + "," + pts[i].y + " ";
+	}
+	if (joinUp) { path += pts[0].x + "," + pts[0].y + " "; }
+	poly.setAttribute("points", path);
+	statics.gLine.appendChild(poly);
+}
+
+function hilightVertex(pt1, pt2, pt3, good)
+{
+	statics.gVertex.innerHTML = "";
+	if (!pt1) { return; }
+
+	var poly = document.createElementNS(xmlns, "polyline");
+	poly.setAttribute("stroke", good ? "green" : "red");
+	poly.setAttribute("fill", "none");
+	var path = (pt1.x + pt2.x)/2 + "," + (pt1.y + pt2.y) / 2 + " " + 
+				pt2.x + "," + pt2.y + " " + 
+				(pt2.x + pt3.x)/2 + "," + (pt2.y + pt3.y)/2;
+	console.log(path);
+	poly.setAttribute("points", path);
+	statics.gVertex.appendChild(poly);
+}
+
+var timer;
+function stepStop()
+{
+	clearTimeout(timer);
+}
+
+var step = 0;
+var steps = [
+	step0,
+	step1,
+	step2,
+	step3,
+	step4,
+	step5,
+	step6,
+	stepStop
+];
+
+function go() {
+	statics.svgCanvas.onclick = clear;
+	statics.svgCanvas.style.cursor = "default";
+	statics.btnGo.disabled = true;
+	console.log("Points", state.points);
+	
+	state.nextStep = 0;
+	timer = setInterval(function() {
+			state.nextStep++;
+			try{ steps[state.nextStep-1](); }
+			catch (error) { console.error(error); }
+		}, 1000);
+}
+statics.btnGo.onclick = go;
+</script>
+
+</body>
+</html>
